@@ -1,24 +1,33 @@
+from threading import Thread
 from time import sleep
+from typing import List
+
 from Process import Process
 
-def launch(nbProcess, runningTime=5):
+
+def launch(nbProcessToCreate: int, runningTime: int):
+
+    def createProcess(x: int):
+        processes.append(Process("P" + str(x), nbProcessToCreate))
+
     processes = []
 
-    for i in range(nbProcess):
-        processes = processes + [Process("P"+str(i), nbProcess)]
+    processes_launches: List[Thread] = []
+
+    for i in range(nbProcessToCreate):
+        processes_launches.append(Thread(target=createProcess, args=(i,)))
+
+    for p in processes_launches:
+        p.start()
+    for p in processes_launches:
+        p.join()
 
     sleep(runningTime)
 
     for p in processes:
         p.stop()
 
-    for p in processes:
-        p.waitStopped()
+
 
 if __name__ == '__main__':
-
-    #bus = EventBus.getInstance()
-    
-    launch(nbProcess=3, runningTime=5)
-
-    #bus.stop()
+    launch(3, 5)
