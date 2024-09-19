@@ -22,6 +22,7 @@ class Com:
         sleep(1)
 
         self.mailbox = Mailbox()
+        self.beatCheck = None
         self.clock = 0
 
         self.nbSync = 0
@@ -38,6 +39,7 @@ class Com:
         if self.getMyId() == self.nbProcess - 1:
             self.currentTokenId = random.randint(0, 10000 * (self.nbProcess - 1))
             self.sendToken()
+        self.startHeartbeat()
 
     def getNbProcess(self) -> int:
 
@@ -171,7 +173,7 @@ class Com:
     @subscribe(threadMode=Mode.PARALLEL, onEvent=BroadcastMessage)
     def onBroadcast(self, message: BroadcastMessage):
 
-        if message.from_id == self.getMyId():
+        if message.from_id == self.getMyId() or type(message) in [HeartbeatMessage]:
             return
         print("Received broadcasted message from", message.from_id, ":", message.getObject())
         if not message.is_system:
@@ -232,3 +234,65 @@ class Com:
                 ret = funcToCall(*args)
             self.releaseSC()
         return ret
+
+    def startHeartbeat(self):
+        """
+        Start the heartbeat of the com
+        :return: None
+        """
+        self.sendMessage(StartHeartbeatMessage(self.getMyId()))
+
+    @subscribe(threadMode=Mode.PARALLEL, onEvent=StartHeartbeatMessage)
+    def onStartHeartbeat(self, event: StartHeartbeatMessage):
+        """
+        Receive a StartHeartbeatMessage
+        :param event: the StartHeartbeatMessage received
+        :return: None
+        """
+        if event.from_id != self.getMyId():
+            return
+        self.heartbeat()
+
+    def heartbeat(self):
+        """
+        Do the heartbeat
+        :return: None
+        """
+        print(self, "Starting heartbeat")
+        while self.alive:
+            self.sendMessage(HeartbeatMessage(self.getMyId()))
+            sleep(0.1)
+
+            self.beatCheck = True
+            print("Checking heartbeat")
+            print(["Alive processes", self.aliveProcesses])
+            print(["Dead processes", self.maybeAliveProcesses])
+            tmpMaybeAliveProcesses = [idMaybeDead for idMaybeDead in range(self.nbProcess) if idMaybeDead != self.getMyId() and idMaybeDead not in self.aliveProcesses]
+            print(["Maybe alive processes", tmpMaybeAliveProcesses])
+            self.aliveProcesses = []
+            for idDeadProcess in self.maybeAliveProcesses:
+                if idDeadProcess < self.getMyId():
+                    self.myId -= 1
+                    print("My id changed from ", self.getMyId()+1, "to", self.getMyId())
+                tmpMaybeAliveProcesses = [(idMaybeDead - 1 if idMaybeDead > idDeadProcess else idMaybeDead) for idMaybeDead in tmpMaybeAliveProcesses]
+                self.nbProcess -= 1
+            self.maybeAliveProcesses = tmpMaybeAliveProcesses
+            print("Heartbeat Checked")
+            self.beatCheck = False
+
+    @subscribe(threadMode=Mode.PARALLEL, onEvent=HeartbeatMessage)
+    def onHeartbeat(self, event: HeartbeatMessage):
+        """
+        Receive a HeartbeatMessage
+        :param event: the HeartbeatMessage received
+        :return: None
+        """
+        while self.beatCheck:
+            pass
+        if event.from_id == self.getMyId():
+            return
+        print("Received heartbeat from", event.from_id)
+        if event.from_id in self.maybeAliveProcesses:
+            self.maybeAliveProcesses.remove(event.from_id)
+        if event.from_id not in self.aliveProcesses:
+            self.aliveProcesses.append(event.from_id)

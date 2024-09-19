@@ -91,7 +91,7 @@ class MessageToSync(MessageTo):
     def __str__(self) -> str:
         return str(self.from_id) + " sends synchroneously to " + str(self.to_id) + " : " + self.object
 
- class HeartbeatMessage(BroadcastMessage):
+class HeartbeatMessage(BroadcastMessage):
 
     def __init__(self, from_id: int):
         super().__init__(None, from_id, True)
