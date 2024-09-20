@@ -71,12 +71,12 @@ class Com:
         self.sendMessage(InitIdMessage(randomNb))
         sleep(2)
         if len(set(self.listInitId)) != self.nbProcess:
-            print("Conflict, retrying")
+            print(self ,"Conflict, retrying")
             self.listInitId = []
             return self.initMyId()
         self.listInitId.sort()
         self.myId = self.listInitId.index(randomNb)
-        print("My id is :", self.myId, "and my list is :", self.listInitId, "and my random is :", randomNb,)
+        print(self, "My id is :", self.myId, "and my list is :", self.listInitId, "and my random is :", randomNb,)
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=InitIdMessage)
     def onReceiveInitIdMessage(self, message: InitIdMessage):
@@ -86,7 +86,7 @@ class Com:
         :return: None
         """
 
-        print("Received init id message with random equal to", message.getObject())
+        print(self, "Received init id message with random equal to", message.getObject())
         self.listInitId.append(message.getObject())
 
     def sendMessage(self, message: Message):
@@ -99,7 +99,7 @@ class Com:
         if not message.is_system:
             self.incClock()
             message.horloge = self.clock
-        print(message)
+        print(self, message)
         PyBus.Instance().post(message)
 
     def sendTo(self, obj: any, com_to: int):
@@ -124,7 +124,7 @@ class Com:
             return
         if not message.is_system:
             self.clock = max(self.clock, message.horloge) + 1
-        print("Received MessageTo from", message.from_id, ":", message.getObject())
+        print(self, "Received MessageTo from", message.from_id, ":", message.getObject())
         self.mailbox.addMessage(message)
 
     def sendToSync(self, obj: any, com_to: int):
@@ -184,7 +184,7 @@ class Com:
         """
 
         if self.getMyId() == com_from:
-            print("Broadcasting synchroneously", obj)
+            print(self, "Broadcasting synchroneously", obj)
             for i in range(self.nbProcess):
                 if i != self.getMyId():
                     self.sendToSync(obj, i, 99)
@@ -200,7 +200,7 @@ class Com:
         """
 
         if self.getMyId() == event.to_id:
-            print("Received AcknowledgementMessage from", event.from_id)
+            print(self, "Received AcknowledgementMessage from", event.from_id)
             self.awaitingFrom = -1
 
     def synchronize(self):
@@ -210,18 +210,18 @@ class Com:
         """
 
         self.isSyncing = True
-        print("Synchronizing")
+        print(self, "Synchronizing")
         while self.isSyncing:
             sleep(0.1)
-            print("Synchronizing in")
+            print(self, "Synchronizing in")
             if not self.alive:
                 return
         while self.nbSync != 0:
             sleep(0.1)
-            print("Synchronizing out")
+            print(self, "Synchronizing out")
             if not self.alive:
                 return
-        print("Synchronized")
+        print(self, "Synchronized")
 
     def requestSC(self):
         """
@@ -229,12 +229,12 @@ class Com:
         :return: None
         """
 
-        print("Requesting SC")
+        print(self, "Requesting SC")
         self.tokenState = TokenState.Requested
         while self.tokenState == TokenState.Requested:
             if not self.alive:
                 return
-        print("Received SC")
+        print(self, "Received SC")
 
     def releaseSC(self):
         """
@@ -242,12 +242,12 @@ class Com:
         :return: None
         """
 
-        print("Releasing SC")
+        print(self, "Releasing SC")
         if self.tokenState == TokenState.SC:
             self.tokenState = TokenState.Release
         self.sendToken()
         self.tokenState = TokenState.Null
-        print("Released SC")
+        print(self, "Released SC")
 
     def broadcast(self, obj: any):
         """
@@ -268,7 +268,7 @@ class Com:
 
         if message.from_id == self.getMyId() or type(message) in [HeartbeatMessage]:
             return
-        print("Received broadcasted message from", message.from_id, ":", message.getObject())
+        print(self, "Received broadcasted message from", message.from_id, ":", message.getObject())
         if not message.is_system:
             self.clock = max(self.clock, message.horloge) + 1
         self.mailbox.addMessage(message)
@@ -318,7 +318,7 @@ class Com:
 
         if event.to_id != self.getMyId() or not self.alive:
             return
-        print("Received token from", event.from_id)
+        print(self, "Received token from", event.from_id)
         self.currentTokenId = event.currentTokenId
         self.nbSync = event.nbSync + int(self.isSyncing)% self.nbProcess
         self.isSyncing = False
@@ -375,20 +375,20 @@ class Com:
             sleep(0.1)
 
             self.beatCheck = True
-            print("Checking heartbeat")
-            print(["Alive processes", self.aliveProcesses])
-            print(["Dead processes", self.maybeAliveProcesses])
+            print(self, "Checking heartbeat")
+            print(self, "Alive processes", self.aliveProcesses)
+            print(self, "Dead processes", self.maybeAliveProcesses)
             tmpMaybeAliveProcesses = [idMaybeDead for idMaybeDead in range(self.nbProcess) if idMaybeDead != self.getMyId() and idMaybeDead not in self.aliveProcesses]
-            print(["Maybe alive processes", tmpMaybeAliveProcesses])
+            print(self, "Maybe alive processes", tmpMaybeAliveProcesses)
             self.aliveProcesses = []
             for idDeadProcess in self.maybeAliveProcesses:
                 if idDeadProcess < self.getMyId():
                     self.myId -= 1
-                    print("My id changed from ", self.getMyId()+1, "to", self.getMyId())
+                    print(self, "My id changed from ", self.getMyId()+1, "to", self.getMyId())
                 tmpMaybeAliveProcesses = [(idMaybeDead - 1 if idMaybeDead > idDeadProcess else idMaybeDead) for idMaybeDead in tmpMaybeAliveProcesses]
                 self.nbProcess -= 1
             self.maybeAliveProcesses = tmpMaybeAliveProcesses
-            print("Heartbeat Checked")
+            print(self, "Heartbeat Checked")
             self.beatCheck = False
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=HeartbeatMessage)
@@ -398,13 +398,16 @@ class Com:
         :param event: le message reçu
         :return: None
         """
-        
+
         while self.beatCheck:
             pass
         if event.from_id == self.getMyId():
             return
-        print("Received heartbeat from", event.from_id)
+        print(self, "Received heartbeat from", event.from_id)
         if event.from_id in self.maybeAliveProcesses:
             self.maybeAliveProcesses.remove(event.from_id)
         if event.from_id not in self.aliveProcesses:
             self.aliveProcesses.append(event.from_id)
+
+    def __str__(self) -> str:
+        return f"Process (id: {self.myId})"
