@@ -1,0 +1,6 @@
+build/
+source/
+__pycache__/
+Makefile
+make.bat
+liengit.txt

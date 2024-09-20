@@ -9,6 +9,10 @@ from pyeventbus3.pyeventbus3 import PyBus, subscribe, Mode
 from Message import *
 
 class Com:
+    """
+    Classe communication
+    Permet de gérer la communication entre les processus
+    """
 
     def __init__(self, nbProcess):
         self.nbProcess = nbProcess
@@ -42,16 +46,26 @@ class Com:
         self.startHeartbeat()
 
     def getNbProcess(self) -> int:
+        """
+        :return: le nombre de processus
+        """
 
         return self.nbProcess
 
     def getMyId(self) -> int:
+        """
+        :return: l'id du processus
+        """
  
         if self.myId is None:
             self.initMyId()
         return self.myId
 
     def initMyId(self):
+        """
+        Initialise l'id du processus
+        :return: None
+        """
         randomNb = random.randint(0, 10000 * (self.nbProcess - 1))
         print(self, ["My random id is:", randomNb])
         self.sendMessage(InitIdMessage(randomNb))
@@ -66,11 +80,21 @@ class Com:
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=InitIdMessage)
     def onReceiveInitIdMessage(self, message: InitIdMessage):
+        """
+        Listener pour les messages d'initialisation d'id
+        :param message: le message reçu
+        :return: None
+        """
 
         print("Received init id message with random equal to", message.getObject())
         self.listInitId.append(message.getObject())
 
     def sendMessage(self, message: Message):
+        """
+        Envoie un message
+        :param message: le message à envoyer
+        :return: None
+        """
 
         if not message.is_system:
             self.incClock()
@@ -79,11 +103,22 @@ class Com:
         PyBus.Instance().post(message)
 
     def sendTo(self, obj: any, com_to: int):
+        """
+        Envoie un message à un processus spécifique
+        :param obj: le message à envoyer
+        :param com_to: le processus destinataire
+        :return: None
+        """
 
         self.sendMessage(MessageTo(obj, self.getMyId(), com_to))
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=MessageTo)
     def onReceive(self, message: MessageTo):
+        """
+        Listener pour les messages
+        :param message: le message reçu
+        :return: None
+        """
 
         if message.to_id != self.getMyId() or type(message) in [MessageToSync, Token, AcknowledgementMessage]:
             return
@@ -93,6 +128,12 @@ class Com:
         self.mailbox.addMessage(message)
 
     def sendToSync(self, obj: any, com_to: int):
+        """
+        Envoie un message synchrone
+        :param obj: le message à envoyer
+        :param com_to: le processus destinataire
+        :return: None
+        """
 
         self.awaitingFrom = com_to
         self.sendMessage(MessageToSync(obj, self.getMyId(), com_to))
@@ -101,6 +142,11 @@ class Com:
                 return
 
     def recevFromSync(self, com_from: int) -> any:
+        """
+        Recoit un message synchrone
+        :param com_from: le processus expéditeur
+        :return: le message reçu
+        """
 
         self.awaitingFrom = com_from
         while com_from == self.awaitingFrom:
@@ -112,6 +158,11 @@ class Com:
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=MessageToSync)
     def onReceiveSync(self, message: MessageToSync):
+        """
+        Listener pour les messages synchrone
+        :param message: le message reçu
+        :return: None
+        """
 
         if message.to_id != self.getMyId():
             return
@@ -125,6 +176,12 @@ class Com:
         self.sendMessage(AcknowledgementMessage(self.getMyId(), message.from_id))
 
     def broadcastSync(self, com_from: int, obj: any = None) -> any:
+        """
+        Broadcast synchrone
+        :param com_from: le processus expéditeur
+        :param obj: le message à envoyer
+        :return: le message reçu
+        """
 
         if self.getMyId() == com_from:
             print("Broadcasting synchroneously", obj)
@@ -136,12 +193,21 @@ class Com:
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=AcknowledgementMessage)
     def onAckSync(self, event: AcknowledgementMessage):
+        """
+        Listener pour les messages d'acquittement synchrone
+        :param event: le message reçu
+        :return: None
+        """
 
         if self.getMyId() == event.to_id:
             print("Received AcknowledgementMessage from", event.from_id)
             self.awaitingFrom = -1
 
     def synchronize(self):
+        """
+        Synchronise les processus
+        :return: None
+        """
 
         self.isSyncing = True
         print("Synchronizing")
@@ -158,6 +224,10 @@ class Com:
         print("Synchronized")
 
     def requestSC(self):
+        """
+        Demande la section critique
+        :return: None
+        """
 
         print("Requesting SC")
         self.tokenState = TokenState.Requested
@@ -166,12 +236,35 @@ class Com:
                 return
         print("Received SC")
 
+    def releaseSC(self):
+        """
+        Relache la section critique
+        :return: None
+        """
+
+        print("Releasing SC")
+        if self.tokenState == TokenState.SC:
+            self.tokenState = TokenState.Release
+        self.sendToken()
+        self.tokenState = TokenState.Null
+        print("Released SC")
+
     def broadcast(self, obj: any):
+        """
+        Broadcast
+        :param obj: le message à envoyer
+        :return: None
+        """
 
         self.sendMessage(BroadcastMessage(obj, self.getMyId()))
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=BroadcastMessage)
     def onBroadcast(self, message: BroadcastMessage):
+        """
+        Listener pour les messages broadcast
+        :param message: le message reçu
+        :return: None
+        """
 
         if message.from_id == self.getMyId() or type(message) in [HeartbeatMessage]:
             return
@@ -181,6 +274,10 @@ class Com:
         self.mailbox.addMessage(message)
 
     def sendToken(self):
+        """
+        Envoie le jeton
+        :return: None
+        """
 
         if self.currentTokenId is None:
             return
@@ -188,29 +285,36 @@ class Com:
         self.sendMessage(Token(self.getMyId(), (self.getMyId() + 1) % self.nbProcess, self.nbSync, self.currentTokenId))
         self.currentTokenId = None
 
-    def releaseSC(self):
-
-        print("Releasing SC")
-        if self.tokenState == TokenState.SC:
-            self.tokenState = TokenState.Release
-        self.sendToken()
-        self.tokenState = TokenState.Null
-        print("Released SC")
 
     def incClock(self):
+        """
+        Incrémente l'horloge
+        :return: None
+        """
 
         self.clock += 1
 
     def getClock(self) -> int:
+        """
+        :return: l'horloge
+        """
 
         return self.clock
 
     def stop(self):
-
+        """
+        Arrête la communication
+        :return: None
+        """
         self.alive = False
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=Token)
     def onToken(self, event: Token):
+        """
+        Listener pour les messages de jeton
+        :param event: le message reçu
+        :return: None
+        """
 
         if event.to_id != self.getMyId() or not self.alive:
             return
@@ -224,6 +328,12 @@ class Com:
             self.sendToken()
 
     def doCriticalAction(self, funcToCall: Callable, *args: List[any]) -> any:
+        """
+        Fait une action critique
+        :param funcToCall: la fonction à appeler
+        :param args: les arguments de la fonction
+        :return: le retour de la fonction
+        """
 
         self.requestSC()
         ret = None
@@ -237,16 +347,17 @@ class Com:
 
     def startHeartbeat(self):
         """
-        Start the heartbeat of the com
+        Démarre le heartbeat
         :return: None
         """
+
         self.sendMessage(StartHeartbeatMessage(self.getMyId()))
 
     @subscribe(threadMode=Mode.PARALLEL, onEvent=StartHeartbeatMessage)
     def onStartHeartbeat(self, event: StartHeartbeatMessage):
         """
-        Receive a StartHeartbeatMessage
-        :param event: the StartHeartbeatMessage received
+        Listener pour les messages de démarrage de heartbeat
+        :param event: le message reçu
         :return: None
         """
         if event.from_id != self.getMyId():
@@ -255,7 +366,7 @@ class Com:
 
     def heartbeat(self):
         """
-        Do the heartbeat
+        Heartbeat
         :return: None
         """
         print(self, "Starting heartbeat")
@@ -283,10 +394,11 @@ class Com:
     @subscribe(threadMode=Mode.PARALLEL, onEvent=HeartbeatMessage)
     def onHeartbeat(self, event: HeartbeatMessage):
         """
-        Receive a HeartbeatMessage
-        :param event: the HeartbeatMessage received
+        Listener pour les messages de heartbeat
+        :param event: le message reçu
         :return: None
         """
+        
         while self.beatCheck:
             pass
         if event.from_id == self.getMyId():
