@@ -2,6 +2,10 @@ PINAUD Nathan
 
 # Intergiciel (Middleware) avec Horloge de Lamport et Gestion de Section Critique Distribuée
 
+## HOW TO
+
+Ouvrir le fichier Com.html
+
 ## Introduction
 
 Ce projet consiste en la réalisation d'un intergiciel (middleware) qui implémente un système de communication entre des processus utilisant l'horloge de Lamport pour la synchronisation des messages. Le middleware gère également la section critique distribuée avec un système de jeton en anneau, ainsi que la communication asynchrone et synchrone entre les processus.
